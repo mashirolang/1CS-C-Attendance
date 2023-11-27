@@ -12,8 +12,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as ImagePicker from "expo-image-picker";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import NetInfo from "@react-native-community/netinfo";
-import moment from "moment";
+import moment from "moment-timezone";
 import axios from "axios";
 
 export default function Main() {
@@ -38,63 +37,68 @@ export default function Main() {
   }, []);
 
   const fetchStatusDetails = async () => {
-    let queueData = await AsyncStorage.getItem("queue");
-    let attendanceLog = await AsyncStorage.getItem("attendanceLog");
+    try {
+      let queueData = await AsyncStorage.getItem("queue");
+      let attendanceLog = await AsyncStorage.getItem("attendanceLog");
 
-    queueData = JSON.parse(queueData);
-    attendanceLog = JSON.parse(attendanceLog);
-    const date = moment().tz("Asia/Manila");
+      // Check if data is null before parsing
+      queueData = queueData ? JSON.parse(queueData) : [];
+      attendanceLog = attendanceLog ? JSON.parse(attendanceLog) : {};
 
-    if (queueData?.length > 0) {
-      setStatus(`ON QUEUE (${queueData.length})`);
-      setImageBackground(onqueue);
-      setQueue(queueData);
+      const date = moment().tz("Asia/Manila");
 
-      try {
-        const response = await axios.post(
-          `https://nodejs-serverless-attendance.vercel.app/api/qr`,
-          {
-            queue: queueData,
-          },
-          {
-            timeout: 10000,
-          }
-        );
+      if (queueData.length > 0) {
+        setStatus(`ON QUEUE (${queueData.length})`);
+        setImageBackground(onqueue);
+        setQueue(queueData);
 
-        if (response.status === 200) {
-          if (
-            attendanceLog &&
-            attendanceLog[date.format("YYYY/MM/DD")]?.length > 0
-          ) {
-            attendanceLog[date.format("YYYY/MM/DD")] = attendanceLog[
-              date.format("YYYY/MM/DD")
-            ].concat(...queueData);
-          } else {
-            attendanceLog = {};
-            attendanceLog[date.format("YYYY/MM/DD")] = queueData;
-          }
-
-          console.log(attendanceLog);
-
-          await AsyncStorage.setItem(
-            "attendanceLog",
-            JSON.stringify(attendanceLog)
+        try {
+          const response = await axios.post(
+            `https://nodejs-serverless-attendance.vercel.app/api/qr`,
+            {
+              queue: queueData,
+            },
+            {
+              timeout: 10000,
+            }
           );
 
-          setStatus("PRESENT");
-          setImageBackground(present);
+          if (response.status === 200) {
+            if (
+              attendanceLog &&
+              attendanceLog[date.format("YYYY/MM/DD")]?.length > 0
+            ) {
+              attendanceLog[date.format("YYYY/MM/DD")] = attendanceLog[
+                date.format("YYYY/MM/DD")
+              ].concat(...queueData);
+            } else {
+              attendanceLog[date.format("YYYY/MM/DD")] = queueData;
+            }
 
-          await AsyncStorage.setItem("queue", JSON.stringify([]));
+            console.log(attendanceLog);
+
+            await AsyncStorage.setItem(
+              "attendanceLog",
+              JSON.stringify(attendanceLog)
+            );
+
+            setStatus("PRESENT");
+            setImageBackground(present);
+
+            await AsyncStorage.setItem("queue", JSON.stringify([]));
+          }
+        } catch (error) {
+          console.log(error);
         }
-      } catch (error) {
-        console.log(error);
+      } else if (attendanceLog[date.format("YYYY/MM/DD")]?.length > 0) {
+        setStatus("PRESENT");
+        setImageBackground(present);
+      } else {
+        setStatus("ABSENT");
+        setImageBackground(absent);
       }
-    } else if (attendanceLog[date.format("YYYY/MM/DD")]?.length > 0) {
-      setStatus("PRESENT");
-      setImageBackground(present);
-    } else {
-      setStatus("ABSENT");
-      setImageBackground(absent);
+    } catch (error) {
+      console.log(error);
     }
   };
 
@@ -167,13 +171,18 @@ export default function Main() {
                 const scanned = await AsyncStorage.getItem("scanned");
 
                 const originalMoment = moment(scanned);
-                const timeDiff = Math.abs(originalMoment - moment());
+                const nowMoment = moment(
+                  moment().tz("Asia/Manila").format("YYYY-MM-DDTHH:mm:ssZ")
+                );
+                const timeDiff = Math.abs(originalMoment - nowMoment);
+
+                console.log(timeDiff, nowMoment, originalMoment);
 
                 if (queue?.length >= 3) {
                   setModalScanQueueMaxVisible(true);
 
                   setTimeout(() => setModalScanQueueMaxVisible(false), 3000);
-                } else if (timeDiff <= 60000) {
+                } else if (timeDiff <= 3600000) {
                   setModalScanLimitVisible(true);
 
                   setTimeout(() => setModalScanLimitVisible(false), 3000);

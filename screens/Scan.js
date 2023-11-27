@@ -24,21 +24,30 @@ export default function Scan() {
   const [modalQueueVisible, setModalQueueVisible] = useState(false);
   const [scanned, setScanned] = useState(false);
   const [location, setLocation] = useState(null);
+  const [locationPermissionRequested, setLocationPermissionRequested] =
+    useState(false);
 
   const navigation = useNavigation();
 
   React.useEffect(() => {
-    (async () => {
+    const requestLocationPermission = async () => {
       let { status } = await Location.requestForegroundPermissionsAsync();
+
       if (status !== "granted") {
-        console.log("ERROR");
+        console.log("Location permission denied");
+        setLocationPermissionRequested(true); // Update the state to indicate that permission has been requested
+        setLocationPermissionRequested(false);
         return;
       }
 
       let location = await Location.getCurrentPositionAsync({});
       setLocation(location);
-    })();
-  }, []);
+    };
+
+    if (!locationPermissionRequested) {
+      requestLocationPermission();
+    }
+  }, [locationPermissionRequested]);
 
   const subjects = [
     "NSTP",
@@ -126,7 +135,7 @@ export default function Scan() {
       } finally {
         await AsyncStorage.setItem(
           "scanned",
-          moment().format("YYYY-MM-DDTHH:mm:ssZ")
+          moment().tz("Asia/Manila").format("YYYY-MM-DDTHH:mm:ssZ")
         );
 
         setTimeout(() => {
@@ -142,14 +151,20 @@ export default function Scan() {
     }
   };
 
-  if (!permission.granted) {
-    // Camera permissions are not granted yet
+  if (!locationPermissionRequested || !permission.granted) {
+    // Location permissions are not granted yet
     return (
       <View style={styles.container}>
         <Text style={{ textAlign: "center" }}>
-          We need your permission to show the camera
+          We need your permission to access location and show the camera
         </Text>
-        <Button onPress={requestPermission} title="Grant Permission" />
+        <Button
+          onPress={() => {
+            requestPermission();
+            setLocationPermissionRequested(true);
+          }}
+          title="Grant Permission"
+        />
       </View>
     );
   }
@@ -176,8 +191,18 @@ export default function Scan() {
               source={require("../assets/img/scan.png")}
               style={styles.centerImage}
             />
-            <View>
-              <Text style={styles.text}>SCAN THE QR</Text>
+            <View style={styles.horizontalTextContainer}>
+              <Text style={styles.text}>S</Text>
+              <Text style={styles.text}>C</Text>
+              <Text style={styles.text}>A</Text>
+              <Text style={styles.text}>N</Text>
+              <Text style={styles.text}> </Text>
+              <Text style={styles.text}>T</Text>
+              <Text style={styles.text}>H</Text>
+              <Text style={styles.text}>E</Text>
+              <Text style={styles.text}> </Text>
+              <Text style={styles.text}>Q</Text>
+              <Text style={styles.text}>R</Text>
             </View>
           </View>
         </Camera>
@@ -246,6 +271,9 @@ const styles = StyleSheet.create({
   icon: {
     width: 122,
     height: 58,
+  },
+  horizontalTextContainer: {
+    flexDirection: "row", // Display the text horizontally
   },
   iconSuccessText: {
     fontSize: 16,
